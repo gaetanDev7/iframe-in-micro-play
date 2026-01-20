@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Micrapp Widget</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+        .card {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #ff6b81;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>Welcome!</h1>
+        <p>This is your Micrapp widget instance.</p>
+        <button onclick="SendMessageToMicrapp()">Close Widget</button>
+    </div>
+
+    <script>
+        // 1. Extract data from the URL (e.g., widget.html?uuid=123&origin=https://parent.com)
+        const urlParams = new URLSearchParams(window.location.search);
+        const widgetUuid = urlParams.get('uuid');
+        
+        // 2. Security: Get the allowed parent origin from the URL 
+        // If not provided, we fall back to "*" (less secure) or a hardcoded string
+        const parentOrigin = urlParams.get('origin') || "*";
+
+        function SendMessageToMicrapp() {
+            // Check if we actually have a UUID before sending
+            if (!widgetUuid) {
+                console.error("No UUID found in URL. Message not sent.");
+                return;
+            }
+
+            const message = { 
+                uuid: widgetUuid, 
+                action: 'close' 
+            };
+
+            console.log("Sending message to parent:", message);
+
+            // Send the message to the parent window
+            window.parent.postMessage(message, parentOrigin);
+        }
+    </script>
+</body>
+</html>
