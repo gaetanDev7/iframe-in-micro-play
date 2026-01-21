@@ -44,22 +44,26 @@
     </div>
 
     <script>
+       
+        
+
+        function SendMessageToMicrapp() {
+
         // 1. Extract data from the URL (e.g., widget.html?uuid=123&origin=https://parent.com)
         const urlParams = new URLSearchParams(window.location.search);
         const widgetUuid = urlParams.get('uuid');
         
         // 2. Security: Get the allowed parent origin from the URL 
         // If not provided, we fall back to "*" (less secure) or a hardcoded string
-        const parentOrigin = urlParams.get('origin') || "*";
+        const parentOrigin = document.referrer || "*";
 
-        function SendMessageToMicrapp() {
             // Check if we actually have a UUID before sending
             if (!widgetUuid) {
                 console.error("No UUID found in URL. Message not sent.");
                 return;
             }
 
-            console.log({ parentOrigin, widgetUuid});
+            console.log({ parentOrigin, widgetUuid, parentUrl: document.referrer});
 
             const message = { 
                 uuid: widgetUuid, 
