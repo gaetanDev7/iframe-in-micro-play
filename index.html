@@ -40,7 +40,8 @@
     <div class="card">
         <h1>Welcome!</h1>
         <p>This is your Micrapp widget instance.</p>
-        <button onclick="SendMessageToMicrapp()">Close Widget</button>
+        <button onclick="SendMessageToMicrapp()">Close</button>
+         <button onclick="SendMessageToMicrappWithData()">Next with data</button>
     </div>
 
     <script>
@@ -68,6 +69,39 @@
             const message = { 
                 uuid: widgetUuid, 
                 action: 'close' 
+            };
+
+            console.log("Sending message to parent:", message);
+
+            // Send the message to the parent window
+            window.parent.postMessage(message, parentOrigin);
+        }
+
+        function SendMessageToMicrappWithData() {
+
+        // 1. Extract data from the URL (e.g., widget.html?uuid=123&origin=https://parent.com)
+        const urlParams = new URLSearchParams(window.location.search);
+        const widgetUuid = urlParams.get('uuid');
+        
+        // 2. Security: Get the allowed parent origin from the URL 
+        // If not provided, we fall back to "*" (less secure) or a hardcoded string
+        const parentOrigin = document.referrer || "*";
+
+            // Check if we actually have a UUID before sending
+            if (!widgetUuid) {
+                console.error("No UUID found in URL. Message not sent.");
+                return;
+            }
+
+            console.log({ parentOrigin, widgetUuid, parentUrl: document.referrer});
+
+            const message = { 
+                uuid: widgetUuid, 
+                action: 'next' ,
+                data: {
+                    status : "success",
+                    id:"room-id-1231"
+                }
             };
 
             console.log("Sending message to parent:", message);
