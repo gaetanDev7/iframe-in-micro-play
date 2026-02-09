@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Demo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+            margin: 0;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        .card {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .error {
+            border-left-color: #ff4757;
+            background-color: #ffe6e6;
+        }
+        video, canvas {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        #capturedImage {
+            max-width: 100%;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Feature Demo</h1>
+
+        <!-- File Picker -->
+        <div class="card">
+            <h2>📁 File Picker</h2>
+            <input type="file" id="fileInput" onchange="handleFileSelect(event)">
+            <div id="fileResult"></div>
+        </div>
+
+        <!-- Geolocation -->
+        <div class="card">
+            <h2>📍 Geolocation</h2>
+            <button onclick="getLocation()">Get My Location</button>
+            <div id="locationResult"></div>
+        </div>
+
+        <!-- Camera -->
+        <div class="card">
+            <h2>📷 Camera</h2>
+            <button onclick="startCamera()">Start Camera</button>
+            <button onclick="capturePhoto()" id="captureBtn" class="hidden">Take Picture</button>
+            <button onclick="stopCamera()" id="stopBtn" class="hidden">Stop Camera</button>
+            <video id="video" autoplay class="hidden"></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <img id="capturedImage" class="hidden">
+        </div>
+    </div>
+
+    <script>
+        let videoStream = null;
+
+        // File Picker Handler
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            const resultDiv = document.getElementById('fileResult');
+
+            if (file) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <strong>Selected File:</strong><br>
+                        Name: ${file.name}<br>
+                        Size: ${(file.size / 1024).toFixed(2)} KB<br>
+                        Type: ${file.type || 'Unknown'}<br>
+                        Last Modified: ${new Date(file.lastModified).toLocaleString()}
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = '';
+            }
+        }
+
+        // Geolocation Handler
+        function getLocation() {
+            const resultDiv = document.getElementById('locationResult');
+
+            if (!navigator.geolocation) {
+                resultDiv.innerHTML = '<div class="result error">Geolocation is not supported by your browser</div>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="result">Getting location...</div>';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <strong>Location Found:</strong><br>
+                            Latitude: ${lat.toFixed(6)}<br>
+                            Longitude: ${lon.toFixed(6)}<br>
+                            Accuracy: ±${accuracy.toFixed(2)} meters<br>
+                            <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank">View on Google Maps</a>
+                        </div>
+                    `;
+                },
+                (error) => {
+                    let errorMessage = 'Unknown error occurred';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${errorMessage}</div>`;
+                }
+            );
+        }
+
+        // Camera Handlers
+        async function startCamera() {
+            const video = document.getElementById('video');
+            const captureBtn = document.getElementById('captureBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' },
+                    audio: false
+                });
+
+                video.srcObject = videoStream;
+                video.classList.remove('hidden');
+                captureBtn.classList.remove('hidden');
+                stopBtn.classList.remove('hidden');
+
+            } catch (error) {
+                alert('Error accessing camera: ' + error.message);
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const capturedImage = document.getElementById('capturedImage');
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageDataUrl = canvas.toDataURL('image/png');
+            capturedImage.src = imageDataUrl;
+            capturedImage.classList.remove('hidden');
+        }
+
+        function stopCamera() {
+            const video = document.getElementById('video');
+            const captureBtn = document.getElementById('captureBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            video.classList.add('hidden');
+            captureBtn.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
