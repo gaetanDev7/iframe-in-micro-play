@@ -163,6 +163,7 @@
                     `;
                 },
                 (error) => {
+                     alert("Sorry, no position available. error: "+ errorMessage);
                     let errorMessage = 'Unknown error occurred';
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
