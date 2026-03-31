@@ -155,6 +155,11 @@
 
         // Helper function to check Permissions Policy
         function checkPermissionPolicy(feature) {
+            // If not in iframe, always allow (standalone mode)
+            if (!isInIframe) {
+                return true;
+            }
+
             try {
                 // Try modern Permissions Policy API
                 if (document.permissionsPolicy?.allowsFeature) {
@@ -167,7 +172,9 @@
             } catch (e) {
                 console.warn('Error checking permission policy:', e);
             }
-            // Fallback: assume allowed and let browser handle it
+
+            // Fallback: if API not available, assume allowed and let browser handle it
+            // This allows the actual permission prompt to show the real error
             return true;
         }
 
