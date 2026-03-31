@@ -80,9 +80,38 @@
         .hidden {
             display: none;
         }
+        .iframe-indicator {
+            position: sticky;
+            top: 0;
+            background-color: #17a2b8;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            z-index: 1000;
+            margin-bottom: 15px;
+        }
+        .iframe-warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
+    <div id="iframeIndicator" class="iframe-indicator hidden">
+        📱 Running in iframe mode - Permission requirements apply
+    </div>
     <div class="container">
         <h1>Feature Demo</h1>
 
@@ -113,7 +142,34 @@
     </div>
 
     <script>
+        // Iframe detection
+        const isInIframe = window.self !== window.top;
         let videoStream = null;
+
+        // Show iframe indicator if running in iframe
+        if (isInIframe) {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('iframeIndicator').classList.remove('hidden');
+            });
+        }
+
+        // Helper function to check Permissions Policy
+        function checkPermissionPolicy(feature) {
+            try {
+                // Try modern Permissions Policy API
+                if (document.permissionsPolicy?.allowsFeature) {
+                    return document.permissionsPolicy.allowsFeature(feature);
+                }
+                // Try deprecated Feature Policy API
+                if (document.featurePolicy?.allowsFeature) {
+                    return document.featurePolicy.allowsFeature(feature);
+                }
+            } catch (e) {
+                console.warn('Error checking permission policy:', e);
+            }
+            // Fallback: assume allowed and let browser handle it
+            return true;
+        }
 
         // File Picker Handler
         function handleFileSelect(event) {
@@ -121,7 +177,13 @@
             const resultDiv = document.getElementById('fileResult');
 
             if (file) {
-                resultDiv.innerHTML = `
+                let iframeInfo = '';
+                if (isInIframe) {
+                    iframeInfo = `<div class="iframe-warning">
+                        ℹ️ Running in iframe. File input requires <code>sandbox="allow-forms"</code> attribute.
+                    </div>`;
+                }
+                resultDiv.innerHTML = iframeInfo + `
                     <div class="result">
                         <strong>Selected File:</strong><br>
                         Name: ${file.name}<br>
@@ -144,10 +206,18 @@
                 return;
             }
 
+            // Check if geolocation is blocked by iframe permissions policy
+            if (isInIframe && !checkPermissionPolicy('geolocation')) {
+                resultDiv.innerHTML = `<div class="result error">
+                    <strong>Blocked by iframe:</strong> Geolocation requires <code>allow="geolocation"</code> attribute on the iframe element.
+                </div>`;
+                return;
+            }
+
             resultDiv.innerHTML = '<div class="result">Getting location...</div>';
 
             navigator.geolocation.getCurrentPosition(
-                (position) => {
+               async (position) => {
                     console.log('get location');
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
@@ -164,11 +234,18 @@
                     `;
                 },
                 (error) => {
-                    
+
                     let errorMessage = 'Unknown error occurred';
+                    let iframeHint = '';
+
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
-                            errorMessage = 'Location permission denied';
+                            if (isInIframe) {
+                                errorMessage = 'Location permission denied';
+                                iframeHint = '<br><br>💡 If running in an iframe, ensure the parent page includes <code>allow="geolocation"</code> on the iframe element.';
+                            } else {
+                                errorMessage = 'Location permission denied by user';
+                            }
                             break;
                         case error.POSITION_UNAVAILABLE:
                             errorMessage = 'Location information unavailable';
@@ -178,7 +255,7 @@
                             break;
                     }
                      alert("Sorry, no position available. error: "+ errorMessage);
-                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${errorMessage}</div>`;
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${errorMessage}${iframeHint}</div>`;
                 }
             );
         }
@@ -188,7 +265,12 @@
             const video = document.getElementById('video');
             const captureBtn = document.getElementById('captureBtn');
             const stopBtn = document.getElementById('stopBtn');
-            
+
+            // Check if camera is blocked by iframe permissions policy
+            if (isInIframe && !checkPermissionPolicy('camera')) {
+                alert('Camera blocked by iframe: Requires allow="camera" attribute on the iframe element.');
+                return;
+            }
 
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
@@ -202,7 +284,22 @@
                 stopBtn.classList.remove('hidden');
 
             } catch (error) {
-                alert('Error accessing camera: ' + error.message);
+                let errorMessage = 'Error accessing camera: ' + error.message;
+
+                // Provide specific guidance based on error type
+                if (error.name === 'NotAllowedError') {
+                    if (isInIframe) {
+                        errorMessage = 'Camera permission denied. If running in an iframe, ensure the parent page includes allow="camera" on the iframe element.';
+                    } else {
+                        errorMessage = 'Camera permission denied by user. Please allow camera access in your browser settings.';
+                    }
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera device found. Please connect a camera and try again.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = 'Camera is already in use by another application.';
+                }
+
+                alert(errorMessage);
             }
         }
 
