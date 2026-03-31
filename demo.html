@@ -256,6 +256,9 @@
                     }
                      alert("Sorry, no position available. error: "+ errorMessage);
                     resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${errorMessage}${iframeHint}</div>`;
+                },
+                {
+                    timeout: 30000 // 30 second timeout
                 }
             );
         }
