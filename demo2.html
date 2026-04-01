@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Demo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+            margin: 0;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        .card {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .error {
+            border-left-color: #ff4757;
+            background-color: #ffe6e6;
+        }
+        video, canvas {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        #capturedImage {
+            max-width: 100%;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+        .hidden {
+            display: none;
+        }
+        .iframe-indicator {
+            position: sticky;
+            top: 0;
+            background-color: #17a2b8;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            z-index: 1000;
+            margin-bottom: 15px;
+        }
+        .iframe-warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div id="iframeIndicator" class="iframe-indicator hidden">
+        📱 Running in iframe mode - Permission requirements apply
+    </div>
+    <div class="container">
+        <h1>Feature Demo</h1>
+
+        <!-- File Picker -->
+        <div class="card">
+            <h2>📁 File Picker</h2>
+            <input type="file" id="fileInput" onchange="handleFileSelect(event)">
+            <div id="fileResult"></div>
+        </div>
+
+        <!-- Geolocation -->
+        <div class="card">
+            <h2>📍 Geolocation</h2>
+            <button onclick="getLocation()">Get My Location</button>
+            <div id="locationResult"></div>
+        </div>
+
+        <!-- Camera -->
+        <div class="card">
+            <h2>📷 Camera</h2>
+            <button onclick="startCamera()">Start Camera</button>
+            <button onclick="capturePhoto()" id="captureBtn" class="hidden">Take Picture</button>
+            <button onclick="stopCamera()" id="stopBtn" class="hidden">Stop Camera</button>
+            <video id="video" autoplay class="hidden"></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <img id="capturedImage" class="hidden">
+        </div>
+    </div>
+
+    <script>
+        // Iframe detection
+        const isInIframe = window.self !== window.top;
+        let videoStream = null;
+
+        // Detect if running in WebView
+        const isWebView = (() => {
+            const ua = navigator.userAgent.toLowerCase();
+            return (ua.includes('wv') ||
+                    ua.includes('webview') ||
+                    (ua.includes('android') && !ua.includes('chrome')) ||
+                    (ua.includes('iphone') && !ua.includes('safari')));
+        })();
+
+        // Show iframe indicator if running in iframe
+        if (isInIframe) {
+            document.addEventListener('DOMContentLoaded', () => {
+                const indicator = document.getElementById('iframeIndicator');
+                indicator.classList.remove('hidden');
+                if (isWebView) {
+                    indicator.innerHTML = '📱 Running in WebView iframe - Requires native permission handlers';
+                    indicator.style.backgroundColor = '#ff9800';
+                }
+            });
+        }
+
+        // Log environment info for debugging
+        console.log('Environment:', {
+            isInIframe,
+            isWebView,
+            isSecureContext: window.isSecureContext,
+            protocol: window.location.protocol,
+            userAgent: navigator.userAgent
+        });
+
+        // PostMessage communication for permission delegation
+        let pendingPermissionCallbacks = {};
+
+        // Listen for permission responses from parent
+        if (isInIframe) {
+            window.addEventListener('message', (event) => {
+                console.log('Received message from parent:', event.data);
+
+                if (event.data.action === 'CAMERA_GRANTED') {
+                    console.log('Parent granted camera permission');
+                    if (pendingPermissionCallbacks.camera) {
+                        pendingPermissionCallbacks.camera.resolve();
+                    }
+                } else if (event.data.action === 'CAMERA_DENIED') {
+                    console.log('Parent denied camera permission:', event.data.error);
+                    if (pendingPermissionCallbacks.camera) {
+                        pendingPermissionCallbacks.camera.reject(new Error(event.data.error || 'Permission denied'));
+                    }
+                } else if (event.data.action === 'GEOLOCATION_GRANTED') {
+                    console.log('Parent granted geolocation permission');
+                    if (pendingPermissionCallbacks.geolocation) {
+                        pendingPermissionCallbacks.geolocation.resolve(event.data.coords);
+                    }
+                } else if (event.data.action === 'GEOLOCATION_DENIED') {
+                    console.log('Parent denied geolocation permission:', event.data.error);
+                    if (pendingPermissionCallbacks.geolocation) {
+                        pendingPermissionCallbacks.geolocation.reject(new Error(event.data.error || 'Permission denied'));
+                    }
+                }
+            });
+        }
+
+        // Helper to request permission from parent
+        function requestPermissionFromParent(type, timeout = 3000) {
+            return new Promise((resolve, reject) => {
+                if (!isInIframe) {
+                    reject(new Error('Not in iframe'));
+                    return;
+                }
+
+                // Store callbacks
+                pendingPermissionCallbacks[type] = { resolve, reject };
+
+                // Send request to parent
+                const parentOrigin = document.referrer ? new URL(document.referrer).origin : '*';
+                console.log('Requesting permission from parent:', type, 'to origin:', parentOrigin);
+                window.parent.postMessage({ type: 'REQUEST_' + type.toUpperCase() }, parentOrigin);
+
+                // Timeout if parent doesn't respond
+                setTimeout(() => {
+                    if (pendingPermissionCallbacks[type]) {
+                        delete pendingPermissionCallbacks[type];
+                        reject(new Error('Parent did not respond to permission request'));
+                    }
+                }, timeout);
+            });
+        }
+
+        // Helper function to check Permissions Policy
+        function checkPermissionPolicy(feature) {
+            // If not in iframe, always allow (standalone mode)
+            if (!isInIframe) {
+                return true;
+            }
+
+            try {
+                // Try modern Permissions Policy API
+                if (document.permissionsPolicy?.allowsFeature) {
+                    return document.permissionsPolicy.allowsFeature(feature);
+                }
+                // Try deprecated Feature Policy API
+                if (document.featurePolicy?.allowsFeature) {
+                    return document.featurePolicy.allowsFeature(feature);
+                }
+            } catch (e) {
+                console.warn('Error checking permission policy:', e);
+            }
+
+            // Fallback: if API not available, assume allowed and let browser handle it
+            // This allows the actual permission prompt to show the real error
+            return true;
+        }
+
+        // File Picker Handler
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            const resultDiv = document.getElementById('fileResult');
+
+            if (file) {
+                let iframeInfo = '';
+                if (isInIframe) {
+                    iframeInfo = `<div class="iframe-warning">
+                        ℹ️ Running in iframe. File input requires <code>sandbox="allow-forms"</code> attribute.
+                    </div>`;
+                }
+                resultDiv.innerHTML = iframeInfo + `
+                    <div class="result">
+                        <strong>Selected File:</strong><br>
+                        Name: ${file.name}<br>
+                        Size: ${(file.size / 1024).toFixed(2)} KB<br>
+                        Type: ${file.type || 'Unknown'}<br>
+                        Last Modified: ${new Date(file.lastModified).toLocaleString()}
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = '';
+            }
+        }
+
+        // Geolocation Handler
+        async function getLocation() {
+            const resultDiv = document.getElementById('locationResult');
+
+            if (!navigator.geolocation) {
+                resultDiv.innerHTML = '<div class="result error">Geolocation is not supported by your browser</div>';
+                return;
+            }
+
+            // Check if geolocation is blocked by iframe permissions policy
+            if (isInIframe && !checkPermissionPolicy('geolocation')) {
+                let message = '<strong>Blocked by iframe:</strong> Geolocation requires <code>allow="geolocation"</code> attribute on the iframe element.';
+                if (isWebView) {
+                    message += '<br><br><strong>⚠️ WebView detected:</strong> The Android/iOS app must implement native permission handlers (<code>onGeolocationPermissionsShowPrompt</code>).';
+                }
+                resultDiv.innerHTML = `<div class="result error">${message}</div>`;
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="result">Getting location...</div>';
+
+            // Try requesting permission from parent first (if in iframe)
+            if (isInIframe) {
+                try {
+                    console.log('Attempting to request geolocation from parent...');
+                    const coords = await requestPermissionFromParent('geolocation', 2000);
+
+                    // Parent provided coordinates directly
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <strong>Location Found (via parent):</strong><br>
+                            Latitude: ${coords.latitude.toFixed(6)}<br>
+                            Longitude: ${coords.longitude.toFixed(6)}<br>
+                            Accuracy: ±${coords.accuracy.toFixed(2)} meters<br>
+                            <a href="https://www.google.com/maps?q=${coords.latitude},${coords.longitude}" target="_blank">View on Google Maps</a>
+                        </div>
+                    `;
+                    return;
+                } catch (e) {
+                    console.log('Parent did not handle permission request, falling back to direct API:', e.message);
+                    // Fall through to direct geolocation API
+                }
+            }
+
+            navigator.geolocation.getCurrentPosition(
+               async (position) => {
+                    console.log('get location');
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <strong>Location Found:</strong><br>
+                            Latitude: ${lat.toFixed(6)}<br>
+                            Longitude: ${lon.toFixed(6)}<br>
+                            Accuracy: ±${accuracy.toFixed(2)} meters<br>
+                            <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank">View on Google Maps</a>
+                        </div>
+                    `;
+                },
+                (error) => {
+
+                    let errorMessage = 'Unknown error occurred';
+                    let iframeHint = '';
+
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            if (isInIframe) {
+                                errorMessage = 'Location permission denied';
+                                iframeHint = '<br><br>💡 If running in an iframe, ensure the parent page includes <code>allow="geolocation"</code> on the iframe element.';
+                                if (isWebView) {
+                                    iframeHint += '<br><br>⚠️ <strong>WebView detected:</strong> The native app must implement <code>onGeolocationPermissionsShowPrompt()</code> and grant permission.';
+                                }
+                            } else {
+                                errorMessage = 'Location permission denied by user';
+                            }
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out (30 seconds)';
+                            if (isWebView) {
+                                iframeHint = '<br><br>⚠️ <strong>WebView detected:</strong> Timeout often means the native app did not implement <code>onGeolocationPermissionsShowPrompt()</code>. No permission prompt was shown.';
+                            }
+                            break;
+                    }
+                     alert("Sorry, no position available. error: "+ errorMessage);
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${errorMessage}${iframeHint}</div>`;
+                },
+                {
+                    timeout: 30000 // 30 second timeout
+                }
+            );
+        }
+
+        // Camera Handlers
+        async function startCamera() {
+            const video = document.getElementById('video');
+            const captureBtn = document.getElementById('captureBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            // Check if camera is blocked by iframe permissions policy
+            if (isInIframe && !checkPermissionPolicy('camera')) {
+                let message = 'Camera blocked by iframe: Requires allow="camera" attribute on the iframe element.';
+                if (isWebView) {
+                    message += '\n\n⚠️ WebView detected: The Android/iOS app must implement onPermissionRequest() to grant camera access to the WebView.';
+                }
+                alert(message);
+                return;
+            }
+
+            // Try requesting permission from parent first (if in iframe)
+            if (isInIframe) {
+                try {
+                    console.log('Attempting to request camera permission from parent...');
+                    await requestPermissionFromParent('camera', 2000);
+                    console.log('Parent granted camera permission, proceeding with getUserMedia');
+                    // Fall through to getUserMedia
+                } catch (e) {
+                    console.log('Parent did not handle camera request, falling back to direct API:', e.message);
+                    // Fall through to direct camera API
+                }
+            }
+
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' },
+                    audio: false
+                });
+
+                video.srcObject = videoStream;
+                video.classList.remove('hidden');
+                captureBtn.classList.remove('hidden');
+                stopBtn.classList.remove('hidden');
+
+            } catch (error) {
+                let errorMessage = 'Error accessing camera: ' + error.message;
+
+                // Provide specific guidance based on error type
+                if (error.name === 'NotAllowedError') {
+                    if (isInIframe) {
+                        errorMessage = 'Camera permission denied.\n\n';
+                        if (isWebView) {
+                            errorMessage += '⚠️ WebView Detected!\n\n';
+                            errorMessage += 'The native app must implement:\n';
+                            errorMessage += '• onPermissionRequest() callback\n';
+                            errorMessage += '• Grant camera via request.grant()\n';
+                            errorMessage += '• CAMERA permission in AndroidManifest\n\n';
+                        }
+                        errorMessage += 'Also ensure iframe has allow="camera" attribute.';
+                    } else {
+                        errorMessage = 'Camera permission denied by user. Please allow camera access in your browser settings.';
+                    }
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera device found. Please connect a camera and try again.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = 'Camera is already in use by another application.';
+                }
+
+                alert(errorMessage);
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const capturedImage = document.getElementById('capturedImage');
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageDataUrl = canvas.toDataURL('image/png');
+            capturedImage.src = imageDataUrl;
+            capturedImage.classList.remove('hidden');
+        }
+
+        function stopCamera() {
+            const video = document.getElementById('video');
+            const captureBtn = document.getElementById('captureBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            video.classList.add('hidden');
+            captureBtn.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
