@@ -277,10 +277,10 @@
             const stopBtn = document.getElementById('stopBtn');
 
             // Check if camera is blocked by iframe permissions policy
-            if (isInIframe && !checkPermissionPolicy('camera')) {
-                alert('Camera blocked by iframe: Requires allow="camera" attribute on the iframe element.');
-                return;
-            }
+            // if (isInIframe && !checkPermissionPolicy('camera')) {
+             //    alert('Camera blocked by iframe: Requires allow="camera" attribute on the iframe element.');
+             //    return;
+            // }
 
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
