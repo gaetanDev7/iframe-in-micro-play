@@ -106,6 +106,32 @@
             font-family: monospace;
             font-size: 0.9em;
         }
+        .pin-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .pin-code {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 0.3em;
+            font-family: monospace;
+            margin-top: 6px;
+        }
+        .copy-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            color: #4CAF50;
+            font-size: 1.4rem;
+            line-height: 1;
+            margin-top: 0;
+        }
+        .copy-btn:hover {
+            color: #388E3C;
+            background: none;
+        }
     </style>
 </head>
 <body>
@@ -114,6 +140,15 @@
     </div>
     <div class="container">
         <h1>Feature Demo</h1>
+
+        <!-- PIN Code -->
+        <div class="card pin-card">
+            <div>
+                <strong>PIN Code</strong>
+                <div class="pin-code" id="pinCode"></div>
+            </div>
+            <button class="copy-btn" onclick="copyPin()" title="Copy PIN" aria-label="Copy PIN">📋</button>
+        </div>
 
         <!-- File Picker -->
         <div class="card">
@@ -142,6 +177,23 @@
     </div>
 
     <script>
+        // PIN code
+        const pin = String(Math.floor(Math.random() * 900000) + 100000);
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('pinCode').textContent = pin;
+        });
+
+        function copyPin() {
+            navigator.clipboard.writeText(pin).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = pin;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            });
+        }
+
         // Iframe detection
         const isInIframe = window.self !== window.top;
         let videoStream = null;
